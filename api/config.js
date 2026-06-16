@@ -3,7 +3,11 @@ import { getFirestore } from "firebase-admin/firestore";
 
 function initFirebase() {
   if (!getApps().length) {
+    const serviceAccount = JSON.parse(
+      process.env.GOOGLE_SERVICE_ACCOUNT_KEY || "{}"
+    );
     initializeApp({
+      credential: cert(serviceAccount),
       projectId: "gen-lang-client-0466013290",
     });
   }
