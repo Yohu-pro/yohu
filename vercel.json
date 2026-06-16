@@ -5,6 +5,7 @@
   "rewrites": [
     { "source": "/api/imagekit-auth", "destination": "/api/imagekit-auth" },
     { "source": "/api/config", "destination": "/api/config" },
+    { "source": "/api/sheets/fetch", "destination": "/api/sheets/fetch" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
