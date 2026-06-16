@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { motion } from "motion/react";
+
 import { 
   Settings, 
   FileText, 
@@ -329,9 +329,9 @@ export default function AdminDashboard({ config, setConfig }: {
            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600 rounded-full blur-[120px]" />
         </div>
 
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
+        <div 
+          
+          
           className="max-w-md w-full bg-white rounded-[3rem] p-12 border border-slate-100 shadow-2xl text-center space-y-10 relative z-10"
         >
           <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-blue-200 relative">
@@ -439,14 +439,14 @@ export default function AdminDashboard({ config, setConfig }: {
               TÀI KHOẢN PHỤ BỊ GIỚI HẠN CHỈ ĐƯỢC SỬA TEXT & ẢNH.
             </p>
           </div>
-        </motion.div>
+        </div>
 
         {/* Pricing Modal */}
         {showPricingModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+            <div 
+              
+              
               className="bg-white rounded-[2.5rem] p-10 max-w-4xl w-full max-h-[90vh] overflow-y-auto space-y-8 shadow-2xl relative"
             >
               <button 
@@ -562,7 +562,7 @@ export default function AdminDashboard({ config, setConfig }: {
                 </button>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Xem các gói và chọn sau khi đăng nhập</p>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
       </div>
@@ -574,9 +574,9 @@ export default function AdminDashboard({ config, setConfig }: {
     if (regSuccess || pendingStatus === 'pending') {
       return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+          <div 
+            
+            
             className="max-w-2xl w-full bg-white rounded-[2.5rem] p-12 border border-slate-100 shadow-2xl text-center space-y-8"
           >
             <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto ring-8 ring-blue-50/50">
@@ -631,16 +631,16 @@ export default function AdminDashboard({ config, setConfig }: {
             <button onClick={handleLogout} className="text-slate-400 hover:text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] pt-4">
               Đăng xuất và quay lại
             </button>
-          </motion.div>
+          </div>
         </div>
       );
     }
 
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+        <div 
+          
+          
           className="max-w-4xl w-full bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-2xl space-y-10"
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-6">
@@ -821,7 +821,7 @@ export default function AdminDashboard({ config, setConfig }: {
           </form>
 
           <p className="text-center text-xs text-slate-400 font-medium">Bằng cách nhấn xác nhận, bạn đồng ý với các điều khoản dịch vụ của YOHU.</p>
-        </motion.div>
+        </div>
       </div>
     );
   }
@@ -1460,13 +1460,11 @@ export default function AdminDashboard({ config, setConfig }: {
             {activeTab === "reports" && (
               <div className="space-y-8">
                 <div className="flex flex-col items-center justify-center p-12 text-center space-y-6 border-2 border-dashed border-slate-100 rounded-3xl">
-                  <motion.div 
-                    animate={isListening ? { scale: [1, 1.2, 1] } : {}}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                    className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-colors ${isListening ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}
+                  <div 
+                    className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-colors ${isListening ? "bg-red-100 text-red-600 scale-110" : "bg-blue-100 text-blue-600"}`}
                   >
                     <Mic className="w-10 h-10" />
-                  </motion.div>
+                  </div>
                   <div className="space-y-2">
                     <h3 className="text-xl font-bold text-slate-900">{isListening ? "Đang lắng nghe..." : "Báo cáo giọng nói"}</h3>
                     <p className="text-slate-500 text-sm max-w-sm">Hé, bạn có thể nói: "Xem báo cáo tồn kho" hoặc "Xem báo cáo đơn hàng".</p>
@@ -1806,9 +1804,7 @@ export default function AdminDashboard({ config, setConfig }: {
                 {selectedTenant && (
                   <div className="fixed inset-0 z-50 flex justify-end">
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedTenant(null)} />
-                    <motion.div 
-                      initial={{ x: "100%" }}
-                      animate={{ x: 0 }}
+                    <div 
                       className="bg-white w-full max-w-xl h-full shadow-2xl p-10 flex flex-col relative z-50"
                     >
                        <div className="flex items-center justify-between mb-10 pb-6 border-b border-slate-100">
@@ -1947,7 +1943,7 @@ export default function AdminDashboard({ config, setConfig }: {
                             Lưu cấu hình hệ thống
                           </button>
                        </div>
-                    </motion.div>
+                    </div>
                   </div>
                 )}
               </div>
