@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from "react";
-
+import React, { useState, useRef, useEffect } from "react";
 import { 
   Settings, 
   FileText, 
@@ -16,6 +15,7 @@ import {
   Sparkles,
   Cpu,
   Eye,
+  EyeOff,
   CheckCircle2,
   AlertCircle
 } from "lucide-react";
@@ -23,11 +23,56 @@ import { SiteConfig } from "../types";
 import { logout, googleSignIn } from "../lib/firebase";
 import { useAdmin, UserRole } from "../lib/AdminContext";
 
-export default function AdminDashboard({ config, setConfig }: { 
+class ErrorBoundary extends React.Component<{children:React.ReactNode},{hasError:boolean}> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) return <div className="p-8 text-red-500">Lỗi hiển thị. Vui lòng tải lại trang.</div>;
+    return this.props.children;
+  }
+}
+
+// Tự sinh mật khẩu ngẫu nhiên cho tài khoản phụ (tránh ký tự dễ nhầm như 0/O, 1/l/I)
+function generateRandomPassword(length: number = 8): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
+}
+
+function AdminDashboardInner({ config, setConfig }: { 
   config: SiteConfig, 
   setConfig: (c: SiteConfig) => void 
 }) {
   const { isEditMode, setIsEditMode, customData, user, role, userConfig, isLoading, pendingStatus, loginWithPassword, logoutUser } = useAdmin();
+
+  const formatTenantDate = (dateVal: any) => {
+    if (!dateVal) return "N/A";
+    try {
+      if (typeof dateVal.toDate === "function") {
+        return dateVal.toDate().toLocaleString("vi-VN");
+      }
+      if (dateVal instanceof Date) {
+        return dateVal.toLocaleString("vi-VN");
+      }
+      if (typeof dateVal === "string" || typeof dateVal === "number") {
+        return new Date(dateVal).toLocaleString("vi-VN");
+      }
+      if (typeof dateVal === "object") {
+        if (dateVal.seconds) {
+          return new Date(dateVal.seconds * 1000).toLocaleString("vi-VN");
+        }
+        if (dateVal._seconds) {
+          return new Date(dateVal._seconds * 1000).toLocaleString("vi-VN");
+        }
+      }
+    } catch (e) {
+      console.warn("Date format error:", e);
+    }
+    return "N/A";
+  };
   const [activeTab, setActiveTab] = useState("general");
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [selectedPackageIntention, setSelectedPackageIntention] = useState<string | null>(null);
@@ -36,9 +81,7 @@ export default function AdminDashboard({ config, setConfig }: {
   const [isSavingTenant, setIsSavingTenant] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
-  const [googleToken, setGoogleToken] = useState<string | null>(sessionStorage.getItem("google_access_token"));
-  const [isListening, setIsListening] = useState(false);
-  const [voiceResult, setVoiceResult] = useState<string | null>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(() => typeof window !== "undefined" ? sessionStorage.getItem("google_access_token") : null);
   const [sheetData, setSheetData] = useState<any[][] | null>(null);
 
   // Password-based login states for Vercel/External domain deployments
@@ -51,6 +94,9 @@ export default function AdminDashboard({ config, setConfig }: {
   const [uploadedAssets, setUploadedAssets] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceResult, setVoiceResult] = useState<string | null>(null);
+  const [showTenantPassword, setShowTenantPassword] = useState(false);
 
   const [newSubAccount, setNewSubAccount] = useState("");
   const [subAccounts, setSubAccounts] = useState<any[]>([]);
@@ -101,16 +147,33 @@ export default function AdminDashboard({ config, setConfig }: {
     try {
       const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
       const { db } = await import("../lib/firebase");
+      const generatedPassword = generateRandomPassword();
       await setDoc(doc(db, "authorized_emails", newSubAccount.trim().toLowerCase()), {
         addedBy: user?.email,
         createdAt: serverTimestamp(),
-        isActive: true
+        isActive: true,
+        password: generatedPassword
       });
-      alert("Đã cấp quyền truy cập cho: " + newSubAccount);
+      alert(`Đã cấp quyền truy cập cho: ${newSubAccount}\n\nMật khẩu đăng nhập: ${generatedPassword}\n\nVui lòng gửi Email + Mật khẩu này cho người dùng. Bạn có thể xem lại hoặc tạo mật khẩu mới trong mục "Chi tiết cấu hình" của tài khoản.`);
       setNewSubAccount("");
       fetchSubAccounts();
     } catch (err) {
       alert("Lỗi khi thêm tài khoản");
+    }
+  };
+
+  const handleRegeneratePassword = async (email: string) => {
+    if (!confirm(`Tạo mật khẩu mới cho ${email}? Mật khẩu cũ sẽ không còn dùng được nữa.`)) return;
+    try {
+      const { doc, updateDoc } = await import("firebase/firestore");
+      const { db } = await import("../lib/firebase");
+      const newPassword = generateRandomPassword();
+      await updateDoc(doc(db, "authorized_emails", email), { password: newPassword });
+      alert(`Mật khẩu mới của ${email}: ${newPassword}\n\nVui lòng gửi lại mật khẩu này cho người dùng.`);
+      setSelectedTenant((prev: any) => prev && prev.id === email ? { ...prev, password: newPassword } : prev);
+      fetchSubAccounts();
+    } catch (err) {
+      alert("Lỗi khi tạo mật khẩu mới");
     }
   };
 
@@ -330,8 +393,6 @@ export default function AdminDashboard({ config, setConfig }: {
         </div>
 
         <div 
-          
-          
           className="max-w-md w-full bg-white rounded-[3rem] p-12 border border-slate-100 shadow-2xl text-center space-y-10 relative z-10"
         >
           <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-blue-200 relative">
@@ -376,12 +437,12 @@ export default function AdminDashboard({ config, setConfig }: {
               </button>
             </div>
 
-            {showPasswordLogin && (
+            {showPasswordLogin ? (
               <div className="mt-4 p-6 bg-slate-50 rounded-3xl border border-slate-250 text-left space-y-4 shadow-inner">
                 <p className="text-xs font-black text-slate-800 uppercase tracking-wider text-center">Đăng nhập Mật Khẩu</p>
-                {passwordError && (
+                {passwordError ? (
                   <p className="text-xs font-bold text-red-500 bg-red-50 p-2.5 rounded-xl border border-red-100 text-center">{passwordError}</p>
-                )}
+                ) : <></>}
                 <div className="space-y-1.5 flex flex-col">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Email quản trị</label>
                   <input
@@ -426,11 +487,11 @@ export default function AdminDashboard({ config, setConfig }: {
                   }}
                   className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-200 flex items-center justify-center gap-2 transition-all active:scale-95"
                 >
-                  {isPasswordSubmitting ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : null}
+                  {isPasswordSubmitting ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <></>}
                   Xác nhận Đăng nhập
                 </button>
               </div>
-            )}
+            ) : <></>}
           </div>
 
           <div className="p-6 bg-blue-50/50 rounded-3xl border border-blue-100/50">
@@ -442,11 +503,9 @@ export default function AdminDashboard({ config, setConfig }: {
         </div>
 
         {/* Pricing Modal */}
-        {showPricingModal && (
+        {showPricingModal ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <div 
-              
-              
               className="bg-white rounded-[2.5rem] p-10 max-w-4xl w-full max-h-[90vh] overflow-y-auto space-y-8 shadow-2xl relative"
             >
               <button 
@@ -521,8 +580,8 @@ export default function AdminDashboard({ config, setConfig }: {
                     }}
                     className={`text-left p-6 rounded-[2rem] border-2 flex flex-col space-y-4 relative transition-all active:scale-[0.98] group/card ${pkg.popular ? "border-blue-600 bg-blue-50/30 ring-4 ring-blue-500/10" : "border-slate-100 bg-slate-50/50 hover:border-blue-200"} disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
-                    {pkg.popular && <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 text-white text-[10px] font-black uppercase rounded-full">Phổ biến nhất</span>}
-                    {pkg.building && <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-amber-400 text-white text-[10px] font-black uppercase rounded-full">Đang xây dựng</span>}
+                    {pkg.popular ? <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 text-white text-[10px] font-black uppercase rounded-full">Phổ biến nhất</span> : <></>}
+                    {pkg.building ? <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-amber-400 text-white text-[10px] font-black uppercase rounded-full">Đang xây dựng</span> : <></>}
                     
                     <div className="space-y-1">
                       <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{pkg.name}</p>
@@ -564,7 +623,7 @@ export default function AdminDashboard({ config, setConfig }: {
               </div>
             </div>
           </div>
-        )}
+        ) : <></>}
       </div>
     );
   }
@@ -575,8 +634,6 @@ export default function AdminDashboard({ config, setConfig }: {
       return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
           <div 
-            
-            
             className="max-w-2xl w-full bg-white rounded-[2.5rem] p-12 border border-slate-100 shadow-2xl text-center space-y-8"
           >
             <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto ring-8 ring-blue-50/50">
@@ -639,8 +696,6 @@ export default function AdminDashboard({ config, setConfig }: {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div 
-          
-          
           className="max-w-4xl w-full bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-2xl space-y-10"
         >
           <div className="flex items-center justify-between border-b border-slate-100 pb-6">
@@ -757,7 +812,7 @@ export default function AdminDashboard({ config, setConfig }: {
                </div>
              </div>
 
-             {regData.language === 'multi' && (
+             {regData.language === 'multi' ? (
                <div className="space-y-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ngôn ngữ bổ sung</p>
                   <div className="flex flex-wrap gap-2">
@@ -777,7 +832,7 @@ export default function AdminDashboard({ config, setConfig }: {
                     ))}
                   </div>
                </div>
-             )}
+             ) : <></>}
 
              <div className="space-y-2 col-span-1 md:col-span-2">
                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1">Phong cách Giao diện</label>
@@ -1027,7 +1082,7 @@ export default function AdminDashboard({ config, setConfig }: {
             >
               {tab.icon}
               {tab.label}
-              {activeTab === tab.id && <ChevronRight className="w-4 h-4 ml-auto" />}
+              {activeTab === tab.id ? <ChevronRight className="w-4 h-4 ml-auto" /> : <></>}
             </button>
           ))}
         </nav>
@@ -1061,7 +1116,7 @@ export default function AdminDashboard({ config, setConfig }: {
       {/* Content Area */}
       <main className="flex-grow p-8 max-w-5xl">
         {/* Page Header Banner for Sub-accounts */}
-        {role === UserRole.SUB_ACCOUNT && (
+        {role === UserRole.SUB_ACCOUNT ? (
           <div className="mb-8 p-6 bg-slate-900 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
              <div className="absolute top-0 right-0 p-8 opacity-10">
                 <Sparkles className="w-32 h-32" />
@@ -1104,29 +1159,29 @@ export default function AdminDashboard({ config, setConfig }: {
                         </>
                       )}
                    </div>
-                   {userConfig?.paymentStatus !== 'paid' && (
+                   {userConfig?.paymentStatus !== 'paid' ? (
                      <a href="tel:0973480488" className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/30">
                         Nâng cấp ngay
                      </a>
-                   )}
+                   ) : <></>}
                 </div>
              </div>
           </div>
-        )}
+        ) : <></>}
 
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="p-8 border-b border-slate-50 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-slate-900">
-              {activeTab === "general" && "Cấu hình công ty"}
-              {activeTab === "resources" && "Tài nguyên Google"}
-              {activeTab === "ai" && "Trình cấu hình AI"}
-              {activeTab === "content" && "Quản lý nội dung bài viết"}
-              {activeTab === "reports" && "Trung tâm Báo cáo"}
-              {activeTab === "assets" && "Kho tư liệu"}
-              {activeTab === "tenants" && "Quản lý Tài khoản & Phân quyền"}
+              {activeTab === "general" ? "Cấu hình công ty" : 
+               activeTab === "resources" ? "Tài nguyên Google" : 
+               activeTab === "ai" ? "Trình cấu hình AI" : 
+               activeTab === "content" ? "Quản lý nội dung bài viết" : 
+               activeTab === "reports" ? "Trung tâm Báo cáo" : 
+               activeTab === "assets" ? "Kho tư liệu" : 
+               activeTab === "tenants" ? "Quản lý Tài khoản & Phân quyền" : ""}
             </h2>
             <div className="flex items-center gap-4">
-              {role === UserRole.SUB_ACCOUNT && (
+              {role === UserRole.SUB_ACCOUNT ? (
                 <button 
                   onClick={handleDeploy}
                   disabled={isDeploying}
@@ -1135,7 +1190,7 @@ export default function AdminDashboard({ config, setConfig }: {
                   <Globe className="w-4 h-4" />
                   {isDeploying ? "Đang tiến hành..." : "Tạo & Xuất Web"}
                 </button>
-              )}
+              ) : <></>}
               <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Chế độ sửa nhanh PC/Web</span>
                 <button 
@@ -1157,7 +1212,7 @@ export default function AdminDashboard({ config, setConfig }: {
           </div>
 
           <div className="p-8">
-            {activeTab === "general" && (
+            {activeTab === "general" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Tên công ty</label>
@@ -1206,9 +1261,9 @@ export default function AdminDashboard({ config, setConfig }: {
                   <input className="input-admin" value={config.bank_account_name || ""} onChange={e => setConfig({...config, bank_account_name: e.target.value})} placeholder="Phạm Văn Khải" />
                 </div>
               </div>
-            )}
+            ) : <></>}
 
-            {activeTab === "branding" && (
+            {activeTab === "branding" ? (
               <div className="space-y-8">
                 <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex gap-4 items-center">
                    <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white">
@@ -1250,9 +1305,9 @@ export default function AdminDashboard({ config, setConfig }: {
                    </ol>
                 </div>
               </div>
-            )}
+            ) : <></>}
 
-            {activeTab === "resources" && (
+            {activeTab === "resources" ? (
               <div className="grid grid-cols-1 gap-6">
                 <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex gap-3 text-amber-700 text-xs shadow-sm">
                   <Database className="w-5 h-5 flex-shrink-0" />
@@ -1277,9 +1332,9 @@ export default function AdminDashboard({ config, setConfig }: {
                   </div>
                 ))}
               </div>
-            )}
+            ) : <></>}
 
-            {activeTab === "ai" && (
+            {activeTab === "ai" ? (
               <div className="space-y-6">
                 <div className="p-6 bg-slate-900 rounded-2xl text-white space-y-4">
                   <div className="flex items-center gap-3">
@@ -1374,9 +1429,9 @@ export default function AdminDashboard({ config, setConfig }: {
                   />
                 </div>
               </div>
-            )}
+            ) : <></>}
 
-            {activeTab === "content" && (
+            {activeTab === "content" ? (
               <div className="space-y-8">
                 <div className="p-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2.5rem] text-white shadow-xl shadow-blue-200 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-8 opacity-10">
@@ -1455,13 +1510,13 @@ export default function AdminDashboard({ config, setConfig }: {
                   </div>
                 </div>
               </div>
-            )}
+            ) : <></>}
 
-            {activeTab === "reports" && (
+            {activeTab === "reports" ? (
               <div className="space-y-8">
                 <div className="flex flex-col items-center justify-center p-12 text-center space-y-6 border-2 border-dashed border-slate-100 rounded-3xl">
                   <div 
-                    className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-colors ${isListening ? "bg-red-100 text-red-600 scale-110" : "bg-blue-100 text-blue-600"}`}
+                    className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all ${isListening ? "bg-red-100 text-red-600 animate-pulse" : "bg-blue-100 text-blue-600"}`}
                   >
                     <Mic className="w-10 h-10" />
                   </div>
@@ -1476,14 +1531,14 @@ export default function AdminDashboard({ config, setConfig }: {
                   >
                     Nhấn để nói
                   </button>
-                  {voiceResult && (
+                  {voiceResult ? (
                     <div className="bg-slate-50 px-4 py-2 rounded-lg text-xs font-medium text-slate-500">
                       Đã nhận: "{voiceResult}"
                     </div>
-                  )}
+                  ) : <></>}
                 </div>
 
-                {sheetData && (
+                {sheetData ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h4 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Dữ liệu từ Google Sheet</h4>
@@ -1510,11 +1565,11 @@ export default function AdminDashboard({ config, setConfig }: {
                       </table>
                     </div>
                   </div>
-                )}
+                ) : <></>}
               </div>
-            )}
+            ) : <></>}
             
-            {activeTab === "assets" && (
+            {activeTab === "assets" ? (
                 <div className="space-y-8">
                     {/* Hidden Native File Input */}
                     <input 
@@ -1619,9 +1674,9 @@ export default function AdminDashboard({ config, setConfig }: {
                       )}
                     </div>
                 </div>
-            )}
+            ) : <></>}
 
-            {activeTab === "ai_sub" && (
+            {activeTab === "ai_sub" ? (
               <div className="space-y-6">
                 <div className="p-8 bg-slate-900 rounded-[2.5rem] text-white space-y-6 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-8 opacity-10">
@@ -1673,9 +1728,9 @@ export default function AdminDashboard({ config, setConfig }: {
                   </div>
                 </div>
               </div>
-            )}
+            ) : <></>}
 
-            {activeTab === "tenants" && (
+            {activeTab === "tenants" ? (
               <div className="space-y-8">
                 <div className="bg-blue-50/50 p-8 rounded-[2.5rem] border border-blue-100/50 space-y-6">
                   <div className="space-y-2">
@@ -1772,7 +1827,7 @@ export default function AdminDashboard({ config, setConfig }: {
                             <td className="px-8 py-6 text-right">
                               <div className="flex items-center justify-end gap-2 translate-x-2">
                                 <button 
-                                  onClick={() => setSelectedTenant(acc)}
+                                  onClick={() => { setSelectedTenant(acc); setShowTenantPassword(false); }}
                                   className="p-3.5 bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-600 hover:shadow-xl hover:shadow-blue-200 rounded-2xl transition-all"
                                   title="Chi tiết cấu hình"
                                 >
@@ -1801,7 +1856,7 @@ export default function AdminDashboard({ config, setConfig }: {
                 </div>
 
                 {/* Tenant Detail Drawer */}
-                {selectedTenant && (
+                {selectedTenant ? (
                   <div className="fixed inset-0 z-50 flex justify-end">
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setSelectedTenant(null)} />
                     <div 
@@ -1835,7 +1890,7 @@ export default function AdminDashboard({ config, setConfig }: {
                              <div className="space-y-1">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Đăng ký ngày</p>
                                 <p className="text-[11px] font-medium text-slate-500">
-                                   {selectedTenant.requestDate?.toDate().toLocaleString('vi-VN') || "N/A"}
+                                   {formatTenantDate(selectedTenant.requestDate || selectedTenant.createdAt)}
                                 </p>
                              </div>
                           </div>
@@ -1852,6 +1907,44 @@ export default function AdminDashboard({ config, setConfig }: {
                                   value={selectedTenant.siteUrl || ""}
                                   onChange={e => setSelectedTenant({...selectedTenant, siteUrl: e.target.value})}
                                 />
+                             </div>
+
+                             <div className="space-y-2">
+                                <label className="text-[11px] font-black text-slate-500 uppercase tracking-wider pl-1">Mật khẩu đăng nhập (cấp riêng cho tài khoản này)</label>
+                                <div className="flex gap-3">
+                                  <input 
+                                    readOnly
+                                    type={showTenantPassword ? "text" : "password"}
+                                    className="flex-grow px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-mono text-sm font-black text-blue-600"
+                                    value={selectedTenant.password || "Chưa có mật khẩu"}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowTenantPassword(!showTenantPassword)}
+                                    title={showTenantPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                                    className="px-5 py-4 bg-slate-100 hover:bg-slate-200 rounded-2xl text-slate-600 flex items-center justify-center"
+                                  >
+                                    {showTenantPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!selectedTenant.password) return;
+                                      navigator.clipboard.writeText(selectedTenant.password);
+                                      alert("Đã copy mật khẩu!");
+                                    }}
+                                    className="px-5 py-4 bg-slate-100 hover:bg-slate-200 rounded-2xl font-black text-xs uppercase tracking-wider text-slate-600 whitespace-nowrap"
+                                  >
+                                    Copy
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRegeneratePassword(selectedTenant.id)}
+                                    className="px-5 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider whitespace-nowrap"
+                                  >
+                                    Tạo mới
+                                  </button>
+                                </div>
                              </div>
 
                              <div className="grid grid-cols-2 gap-4">
@@ -1945,9 +2038,9 @@ export default function AdminDashboard({ config, setConfig }: {
                        </div>
                     </div>
                   </div>
-                )}
+                ) : <></>}
               </div>
-            )}
+            ) : <></>}
           </div>
         </div>
       </main>
@@ -1971,5 +2064,13 @@ export default function AdminDashboard({ config, setConfig }: {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function AdminDashboard(props: { config: SiteConfig; setConfig: (c: SiteConfig) => void }) {
+  return (
+    <ErrorBoundary>
+      <AdminDashboardInner {...props} />
+    </ErrorBoundary>
   );
 }
