@@ -61,6 +61,15 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [customData, setCustomData] = useState<Record<string, any>>({});
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
 
+  // Khi admin đăng nhập thành công (Super Admin hoặc Sub Account), mặc định bật "Chế độ sửa nhanh".
+  // Admin vẫn có thể tự tắt thủ công bằng nút bật/tắt trong trang quản trị.
+  useEffect(() => {
+    if (role === UserRole.SUPER_ADMIN || role === UserRole.SUB_ACCOUNT) {
+      setIsEditMode(true);
+    }
+  }, [role]);
+
+
   useEffect(() => {
     // Check if there is a saved custom session
     const savedSession = sessionStorage.getItem("yohu_custom_admin_user") || localStorage.getItem("yohu_custom_admin_user");
@@ -220,19 +229,18 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPass = pass.trim();
 
-    // Valid passwords: brand name, hotlines, and super password
-    const validPasswords = [
+    // Super Admin: dùng mật khẩu cố định (brand name, hotline...)
+    const superAdminPasswords = [
       "yohu.vn",
       "0339606969",
       "yohu@2026",
       "0973480488",
     ];
 
-    if (!validPasswords.includes(trimmedPass)) {
-      throw new Error("Mật khẩu không chính xác!");
-    }
-
     if (trimmedEmail === SUPER_ADMIN_EMAIL) {
+      if (!superAdminPasswords.includes(trimmedPass)) {
+        throw new Error("Mật khẩu không chính xác!");
+      }
       const customUser = {
         email: SUPER_ADMIN_EMAIL,
         displayName: "Yohu Super Admin",
@@ -245,11 +253,22 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       sessionStorage.setItem("yohu_custom_admin_user", JSON.stringify(customUser));
       return true;
     } else {
-      // Check if sub-account email is authorized
+      // Tài khoản phụ: phải khớp đúng mật khẩu riêng do Super Admin cấp/lưu sẵn trong Firestore
       try {
         const subAccountDoc = await getDoc(doc(db, 'authorized_emails', trimmedEmail));
-        if (subAccountDoc.exists() && subAccountDoc.data().isActive !== false) {
+        if (subAccountDoc.exists()) {
           const data = subAccountDoc.data();
+
+          if (data.isActive === false) {
+            throw new Error("Tài khoản đang chờ phê duyệt!");
+          }
+          if (!data.password) {
+            throw new Error("Tài khoản chưa được cấp mật khẩu. Vui lòng liên hệ Quản trị viên.");
+          }
+          if (trimmedPass !== data.password) {
+            throw new Error("Mật khẩu không chính xác!");
+          }
+
           const customUser = {
             email: trimmedEmail,
             displayName: data.displayName || "Admin Sub-Account",
@@ -274,10 +293,8 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           });
           sessionStorage.setItem("yohu_custom_admin_user", JSON.stringify(customUser));
           return true;
-        } else if (subAccountDoc.exists()) {
-          throw new Error("Tài khoản đang chờ phê duyệt!");
         } else {
-          // Auto register as pending sub-account
+          // Auto register as pending sub-account (chưa có mật khẩu, chờ Admin cấp quyền)
           await setDoc(doc(db, 'authorized_emails', trimmedEmail), {
             isActive: false,
             requestDate: serverTimestamp(),
@@ -298,6 +315,7 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setUser(null);
     setIsAuthenticated(false);
     setRole(UserRole.UNAUTHORIZED);
+    setIsEditMode(false);
     setPendingStatus(null);
     sessionStorage.removeItem("yohu_custom_admin_user");
     localStorage.removeItem("yohu_custom_admin_user");
