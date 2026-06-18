@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import { 
   Mic, 
   Settings, 
@@ -28,7 +27,8 @@ import {
   BookOpen
 } from "lucide-react";
 import { SiteConfig, DEFAULT_PRODUCT_CATEGORIES } from "../types";
-import { useAdmin } from "../lib/AdminContext";
+import { useAdmin, UserRole } from "../lib/AdminContext";
+import { Link } from "react-router-dom";
 
 // Helper to sum a column in a 2D sheet array based on headers
 function sumSheetColumn(rows: any[][], colKeywords: string[]): number | null {
@@ -347,6 +347,9 @@ function parseVoiceCommands(values: any[][]): VoiceCommandRow[] {
 
 const fetchVoiceCommandsFromSheet = async (token: string, sheetId: string): Promise<VoiceCommandRow[]> => {
   const possibleRanges = [
+    "BaoCaoGiongNoi!A1:G100",
+    "'BaoCaoGiongNoi'!A1:G100",
+    "BaoCaoGiongNoi!A2:G100",
     "'Giọng nói báo cáo admin'!A1:G100",
     "'Giọng nói báo cáo admim'!A1:G100",
     "'giọng nói báo cáo admin'!A1:G100",
@@ -396,7 +399,9 @@ const normalizeValueToMillions = (val: number) => {
 };
 
 export default function InventorySystem({ config }: { config: SiteConfig }) {
-  const { isAuthenticated } = useAdmin();
+  const { isAuthenticated, role, isLoading } = useAdmin();
+  const isAuthorized = role === UserRole.SUPER_ADMIN || role === UserRole.SUB_ACCOUNT;
+
   const [showLockModal, setShowLockModal] = useState(false);
   const [lockMessage, setLockMessage] = useState("");
   const [isListening, setIsListening] = useState(false);
@@ -1033,6 +1038,34 @@ export default function InventorySystem({ config }: { config: SiteConfig }) {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-5 px-6 text-center">
+        <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center shadow-xl shadow-blue-200">
+          <ShieldCheck className="w-10 h-10 text-white" />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900">Trang này cần quyền Quản trị viên</h2>
+        <p className="text-slate-500 max-w-md">
+          Hệ thống Quản lý bán hàng chỉ dành cho Admin hoặc tài khoản đã được cấp quyền. Vui lòng đăng nhập tại trang Admin để tiếp tục.
+        </p>
+        <Link
+          to="/admin"
+          className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-colors"
+        >
+          Đăng nhập Admin
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div id="admin_portal_view" className="bg-slate-50/50 font-sans min-h-screen overflow-x-hidden pb-12">
       
@@ -1081,11 +1114,10 @@ export default function InventorySystem({ config }: { config: SiteConfig }) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {cloudDocs.map((doc, idx) => (
-            <motion.div
+            <div
               key={idx}
               onClick={(e) => handleDocClick(e, doc)}
-              whileHover={{ y: -3, scale: 1.01 }}
-              className="bg-white border border-slate-100 hover:border-slate-300 rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-6 cursor-pointer group"
+              className="bg-white border border-slate-100 hover:border-slate-300 rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-all duration-300 transform hover:-translate-y-1 hover:scale-[1.01] flex flex-col justify-between gap-6 cursor-pointer group"
             >
               <div className="space-y-4">
                 <div className="flex justify-between items-start">
@@ -1129,7 +1161,7 @@ export default function InventorySystem({ config }: { config: SiteConfig }) {
                   Truy cập liên kết
                 </span>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -1208,7 +1240,7 @@ export default function InventorySystem({ config }: { config: SiteConfig }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[190px] overflow-y-auto pr-1">
               {(showCommandsInfo ? voiceCommands : voiceCommands.slice(0, 6)).map((item, idx) => (
                 <button 
-                  key={idx}
+                  key={item.command || idx}
                   type="button"
                   onClick={() => handleCommand(item.command)}
                   className="p-3 bg-slate-900/45 hover:bg-slate-900/90 hover:border-indigo-500 border border-slate-800/65 rounded-xl text-left text-[11px] font-semibold hover:text-indigo-400 text-slate-200 transition-all flex items-start gap-2 group"
@@ -1282,7 +1314,7 @@ export default function InventorySystem({ config }: { config: SiteConfig }) {
 
             <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100 divide-y divide-slate-100">
               {stock.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-2 gap-4 py-2.5 text-[11.5px]">
+                <div key={item.code || idx} className="grid grid-cols-2 gap-4 py-2.5 text-[11.5px]">
                   <div className="flex items-center gap-2 font-semibold text-slate-700 min-w-0">
                     <span className="h-2 w-2 rounded-full bg-[#008060] shrink-0" />
                     <span className="truncate">{item.name}:</span>
@@ -1303,14 +1335,12 @@ export default function InventorySystem({ config }: { config: SiteConfig }) {
       <section className="py-16 px-6 mt-12 bg-slate-900 text-white max-w-7xl mx-auto rounded-[3rem]">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center px-6">
           <div className="order-2 lg:order-1 flex flex-col items-center justify-center p-12 bg-white/5 border border-white/10 rounded-[3.5rem] backdrop-blur-xl relative overflow-hidden">
-             <motion.button
+             <button
                 onClick={startVoiceCommand}
-                animate={isListening ? { scale: [1, 1.08, 1] } : {}}
-                transition={{ duration: 1, repeat: Infinity }}
-                className={`w-32 h-32 rounded-full flex items-center justify-center shadow-2xl z-10 transition-all hover:scale-105 active:scale-95 hover:ring-8 hover:ring-blue-500/20 ${isListening ? "bg-red-500 ring-red-500/30" : "bg-blue-600 ring-blue-600/20"}`}
+                className={`w-32 h-32 rounded-full flex items-center justify-center shadow-2xl z-10 transition-all hover:scale-105 active:scale-95 hover:ring-8 hover:ring-blue-500/20 ${isListening ? "bg-red-500 ring-red-500/30 animate-pulse" : "bg-blue-600 ring-blue-600/20"}`}
              >
                 <Mic className="w-14 h-14 text-white" />
-             </motion.button>
+             </button>
              
              <div className="mt-8 text-center z-10 w-full">
                 <h2 className="text-2xl font-black uppercase tracking-widest mb-2 text-white">TRẢI NGHIỆM GIỌNG NỐI</h2>
@@ -1324,28 +1354,23 @@ export default function InventorySystem({ config }: { config: SiteConfig }) {
                 </button>
              </div>
 
-             <AnimatePresence>
-               {showCommandsInfo && (
-                 <motion.div 
-                   initial={{ opacity: 0, height: 0 }}
-                   animate={{ opacity: 1, height: "auto" }}
-                   exit={{ opacity: 0, height: 0 }}
-                   className="w-full mt-2 space-y-3 overflow-hidden text-left max-h-[320px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800"
-                 >
-                   {voiceCommands.map((item, i) => (
-                     <button
-                       key={i}
-                       type="button"
-                       onClick={() => handleCommand(item.command)}
-                       className="w-full px-4 py-3 bg-slate-900/40 hover:bg-slate-950/80 hover:border-blue-500 border border-slate-800/80 rounded-2xl text-[12px] font-semibold text-slate-200 flex items-center gap-4 transition-all"
-                     >
-                        <div className="w-6 h-6 rounded-full bg-red-600 flex flex-shrink-0 items-center justify-center text-[11px] font-black text-white">{i+1}</div>
-                        <span className="flex-1 text-slate-100 pr-2 truncate text-left">{item.command}</span>
-                     </button>
-                   ))}
-                 </motion.div>
-               )}
-             </AnimatePresence>
+             {showCommandsInfo && (
+               <div 
+                 className="w-full mt-2 space-y-3 overflow-hidden text-left max-h-[320px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800 transition-all duration-300"
+               >
+                 {voiceCommands.map((item, i) => (
+                   <button
+                     key={item.command || i}
+                     type="button"
+                     onClick={() => handleCommand(item.command)}
+                     className="w-full px-4 py-3 bg-slate-900/40 hover:bg-slate-950/80 hover:border-blue-500 border border-slate-800/80 rounded-2xl text-[12px] font-semibold text-slate-200 flex items-center gap-4 transition-all"
+                   >
+                     <div className="w-6 h-6 rounded-full bg-red-600 flex flex-shrink-0 items-center justify-center text-[11px] font-black text-white">{i+1}</div>
+                     <span className="flex-1 text-slate-100 pr-2 truncate text-left">{item.command}</span>
+                   </button>
+                 ))}
+               </div>
+             )}
           </div>
 
           <div className="space-y-8 order-1 lg:order-2">
@@ -1707,258 +1732,236 @@ export default function InventorySystem({ config }: { config: SiteConfig }) {
       </section>
 
       {/* LOCK INFORMATION MODAL */}
-      <AnimatePresence>
-        {showLockModal && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowLockModal(false)}
-              className="absolute inset-0 bg-[#000033]/60 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 15 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 15 }}
-              className="bg-white border border-slate-100 rounded-[2.5rem] p-8 max-w-md w-full relative z-[160] shadow-2xl flex flex-col items-center text-center gap-6"
-            >
-              <div className="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center border border-red-100 flex-shrink-0 animate-bounce">
-                <ShieldCheck className="w-8 h-8 text-red-600" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Tài liệu nội bộ bảo mật</h3>
-                <p className="text-slate-500 text-sm leading-relaxed">
-                  {lockMessage || "Đây là tài nguyên nội bộ của YOHU. Vui lòng đăng nhập với tài khoản Quản trị (Admin) để thực hiện thao tác này."}
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row w-full gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowLockModal(false)}
-                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
-                >
-                  Đóng lại
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLockModal(false);
-                    window.location.href = "/admin";
-                  }}
-                  className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-100 transition-all"
-                >
-                  Đăng nhập Admin
-                </button>
-              </div>
-            </motion.div>
+      {showLockModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div
+            onClick={() => setShowLockModal(false)}
+            className="absolute inset-0 bg-[#000033]/60 backdrop-blur-md transition-opacity duration-300"
+          />
+          <div
+            className="bg-white border border-slate-100 rounded-[2.5rem] p-8 max-w-md w-full relative z-[160] shadow-2xl flex flex-col items-center text-center gap-6 transform transition-all duration-300"
+          >
+            <div className="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center border border-red-100 flex-shrink-0 animate-bounce">
+              <ShieldCheck className="w-8 h-8 text-red-600" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Tài liệu nội bộ bảo mật</h3>
+              <p className="text-slate-500 text-sm leading-relaxed">
+                {lockMessage || "Đây là tài nguyên nội bộ của YOHU. Vui lòng đăng nhập với tài khoản Quản trị (Admin) để thực hiện thao tác này."}
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row w-full gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowLockModal(false)}
+                className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all"
+              >
+                Đóng lại
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLockModal(false);
+                  window.location.href = "/admin";
+                }}
+                className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-100 transition-all"
+              >
+                Đăng nhập Admin
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       {/* VOICE REPORT RESULT MODAL */}
-      <AnimatePresence>
-        {activeReport && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setActiveReport(null)}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 15 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 15 }}
-              className="bg-white border border-slate-100 rounded-[2.5rem] p-8 max-w-lg w-full relative z-[160] shadow-2xl flex flex-col gap-6"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 flex-shrink-0">
-                    <Mic className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-blue-600 uppercase tracking-widest leading-none">Báo cáo YOHU AI</h3>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Kết quả khớp lệnh tự động</p>
-                  </div>
+      {activeReport && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div
+            onClick={() => setActiveReport(null)}
+            className="absolute inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity duration-300"
+          />
+          <div
+            className="bg-white border border-slate-100 rounded-[2.5rem] p-8 max-w-lg w-full relative z-[160] shadow-2xl flex flex-col gap-6 transform transition-all duration-300"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 flex-shrink-0">
+                  <Mic className="w-5 h-5 text-blue-600" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveReport(null)}
-                  className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div>
+                  <h3 className="text-sm font-black text-blue-600 uppercase tracking-widest leading-none">Báo cáo YOHU AI</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Kết quả khớp lệnh tự động</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveReport(null)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-left">
+              <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Câu lệnh đã nhận diện:</span>
+                <p className="text-slate-900 font-medium text-sm mt-1">"{activeReport.command}"</p>
               </div>
 
-              <div className="space-y-4 text-left">
-                <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Câu lệnh đã nhận diện:</span>
-                  <p className="text-slate-900 font-medium text-sm mt-1">"{activeReport.command}"</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-2xl">
+                  <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider block">Doanh thu ghi nhận:</span>
+                  <p className="text-emerald-800 font-black text-lg mt-1">{activeReport.revenue || "0đ"}</p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-2xl">
-                    <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider block">Doanh thu ghi nhận:</span>
-                    <p className="text-emerald-800 font-black text-lg mt-1">{activeReport.revenue || "0đ"}</p>
-                  </div>
-                  <div className="bg-blue-50/60 border border-blue-100 p-4 rounded-2xl">
-                    <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block">Lợi nhuận ghi nhận:</span>
-                    <p className="text-blue-800 font-black text-lg mt-1">{activeReport.profit || "0đ"}</p>
-                  </div>
-                </div>
-
-                <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 space-y-2.5 shadow-inner">
-                  <div className="flex items-center gap-2 text-indigo-300 font-bold text-[10px] uppercase tracking-widest">
-                    <Volume2 className="w-4 h-4 text-indigo-400 animate-bounce" />
-                    <span>Trợ lý đang phát đọc:</span>
-                  </div>
-                  <p className="text-slate-200 text-sm leading-relaxed font-semibold">"{activeReport.voiceReport}"</p>
+                <div className="bg-blue-50/60 border border-blue-100 p-4 rounded-2xl">
+                  <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block">Lợi nhuận ghi nhận:</span>
+                  <p className="text-blue-800 font-black text-lg mt-1">{activeReport.profit || "0đ"}</p>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100 pt-5">
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-wider">
-                  <div className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
-                  <span>Tự động đóng sau {reportPopupCountdown}s</span>
+              <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 space-y-2.5 shadow-inner">
+                <div className="flex items-center gap-2 text-indigo-300 font-bold text-[10px] uppercase tracking-widest">
+                  <Volume2 className="w-4 h-4 text-indigo-400 animate-bounce" />
+                  <span>Trợ lý đang phát đọc:</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveReport(null)}
-                  className="w-full sm:w-auto px-6 py-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-black text-xs uppercase tracking-widest rounded-xl transition-all"
-                >
-                  Đóng
-                </button>
+                <p className="text-slate-200 text-sm leading-relaxed font-semibold">"{activeReport.voiceReport}"</p>
               </div>
-            </motion.div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100 pt-5">
+              <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                <div className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                <span>Tự động đóng sau {reportPopupCountdown}s</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveReport(null)}
+                className="w-full sm:w-auto px-6 py-3 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 font-black text-xs uppercase tracking-widest rounded-xl transition-all"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       {/* PACKAGE REGISTRATION PLAN MODAL */}
-      <AnimatePresence>
-        {isPlanModalOpen && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsPlanModalOpen(false)}
-              className="absolute inset-0 bg-[#000033]/60 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 15 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 15 }}
-              className="bg-white border border-slate-100 rounded-[2.5rem] w-full max-w-lg relative z-[160] shadow-2xl flex flex-col overflow-hidden text-slate-900"
-            >
-              {/* Header */}
-              <div className="bg-[#000033] text-white p-7 flex justify-between items-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl" />
-                <div className="space-y-1">
-                  <span className="text-[9px] bg-red-600 text-white font-black px-2.5 py-0.5 rounded uppercase tracking-wider">
-                    YOHU® SERVICE
-                  </span>
-                  <h3 className="text-lg font-black uppercase tracking-tight">ĐĂNG KÝ DỊCH VỤ</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsPlanModalOpen(false)}
-                  className="w-8 h-8 rounded-full bg-red-600 hover:bg-red-500 hover:scale-110 flex items-center justify-center transition-all duration-300 text-white shadow-lg active:scale-95 cursor-pointer"
-                >
-                  <X className="w-4 h-4 stroke-[2.5]" />
-                </button>
+      {isPlanModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" id="plan-modal-container">
+          <div
+            onClick={() => setIsPlanModalOpen(false)}
+            className="absolute inset-0 bg-[#000033]/60 backdrop-blur-md transition-opacity duration-300"
+            id="plan-modal-backdrop"
+          />
+          <div
+            className="bg-white border border-slate-100 rounded-[2.5rem] w-full max-w-lg relative z-[160] shadow-2xl flex flex-col overflow-hidden text-slate-900 transform transition-all duration-300"
+            id="plan-modal-content"
+          >
+            {/* Header */}
+            <div className="bg-[#000033] text-white p-7 flex justify-between items-center relative overflow-hidden" id="plan-modal-header">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl" id="plan-modal-header-glow" />
+              <div className="space-y-1">
+                <span className="text-[9px] bg-red-600 text-white font-black px-2.5 py-0.5 rounded uppercase tracking-wider" id="plan-modal-badge">
+                  YOHU® SERVICE
+                </span>
+                <h3 className="text-lg font-black uppercase tracking-tight">ĐĂNG KÝ DỊCH VỤ</h3>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsPlanModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-red-600 hover:bg-red-500 hover:scale-110 flex items-center justify-center transition-all duration-300 text-white shadow-lg active:scale-95 cursor-pointer"
+                id="plan-modal-close-btn"
+              >
+                <X className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
 
-              {planSuccess ? (
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="p-12 text-center space-y-4 flex flex-col items-center justify-center"
-                >
-                  <div className="w-16 h-16 rounded-full bg-green-50 text-green-600 border border-green-200 flex items-center justify-center mb-2 animate-bounce">
-                    <CheckCircle2 className="w-8 h-8 stroke-[3]" />
+            {planSuccess ? (
+              <div
+                className="p-12 text-center space-y-4 flex flex-col items-center justify-center"
+                id="plan-modal-success"
+              >
+                <div className="w-16 h-16 rounded-full bg-green-50 text-green-600 border border-green-200 flex items-center justify-center mb-2 animate-bounce">
+                  <CheckCircle2 className="w-8 h-8 stroke-[3]" />
+                </div>
+                <h4 className="text-lg font-extrabold text-slate-900 uppercase">Đăng ký thành công!</h4>
+                <p className="text-xs text-slate-500 leading-relaxed max-w-sm">
+                  Cảm ơn anh chị <b>{planForm.name}</b>. Yêu cầu kích hoạt dịch vụ <b>{selectedPlanName} ({selectedPlanPrice})</b> đã được tiếp nhận và xử lý tự động. Chuyên viên chăm sóc khách hàng YOHU sẽ liên hệ sớm nhất qua số điện thoại <b>{planForm.phone}</b> để bàn giao hệ thống!
+                </p>
+                <div className="pt-4 text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">
+                  Đang tự động đóng...
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handlePlanFormSubmit} className="p-8 space-y-6 text-left" id="plan-modal-form">
+                {/* Selected service summary */}
+                <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Gói đã chọn:</p>
+                    <h4 className="text-base font-black text-slate-900 uppercase tracking-tight mt-0.5">{selectedPlanName}</h4>
                   </div>
-                  <h4 className="text-lg font-extrabold text-slate-900 uppercase">Đăng ký thành công!</h4>
-                  <p className="text-xs text-slate-500 leading-relaxed max-w-sm">
-                    Cảm ơn anh chị <b>{planForm.name}</b>. Yêu cầu kích hoạt dịch vụ <b>{selectedPlanName} ({selectedPlanPrice})</b> đã được tiếp nhận và xử lý tự động. Chuyên viên chăm sóc khách hàng YOHU sẽ liên hệ sớm nhất qua số điện thoại <b>{planForm.phone}</b> để bàn giao hệ thống!
-                  </p>
-                  <div className="pt-4 text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">
-                    Đang tự động đóng...
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Đơn giá:</p>
+                    <p className={`text-lg font-black ${selectedPlanColor}`}>{selectedPlanPrice}</p>
                   </div>
-                </motion.div>
-              ) : (
-                <form onSubmit={handlePlanFormSubmit} className="p-8 space-y-6 text-left">
-                  {/* Selected service summary */}
-                  <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Gói đã chọn:</p>
-                      <h4 className="text-base font-black text-slate-900 uppercase tracking-tight mt-0.5">{selectedPlanName}</h4>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Đơn giá:</p>
-                      <p className={`text-lg font-black ${selectedPlanColor}`}>{selectedPlanPrice}</p>
-                    </div>
-                  </div>
+                </div>
 
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Họ và tên của bạn <span className="text-red-500">*</span></label>
-                      <input
-                        type="text"
-                        required
-                        value={planForm.name}
-                        onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 transition-all focus:outline-none"
-                        placeholder="Ví dụ: Nguyễn Văn A"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Số điện thoại liên hệ <span className="text-red-500">*</span></label>
-                      <input
-                        type="tel"
-                        required
-                        value={planForm.phone}
-                        onChange={(e) => setPlanForm({ ...planForm, phone: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 transition-all focus:outline-none"
-                        placeholder="Ví dụ: 0973480488"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Ghi chú yêu cầu thêm (nếu có)</label>
-                      <textarea
-                        value={planForm.notes}
-                        onChange={(e) => setPlanForm({ ...planForm, notes: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 h-20 transition-all focus:outline-none resize-none"
-                        placeholder="Nhập ghi chú hoặc thời gian thuận tiện để gọi lại cho bạn..."
-                      />
-                    </div>
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Họ và tên của bạn <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      value={planForm.name}
+                      onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 transition-all focus:outline-none"
+                      placeholder="Ví dụ: Nguyễn Văn A"
+                    />
                   </div>
 
-                  <div className="flex gap-4 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsPlanModalOpen(false)}
-                      className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer text-center"
-                    >
-                      Hủy bỏ
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-blue-100 active:scale-95 transition-all cursor-pointer text-center"
-                    >
-                      TIẾP TỤC ĐĂNG KÝ
-                    </button>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Số điện thoại liên hệ <span className="text-red-500">*</span></label>
+                    <input
+                      type="tel"
+                      required
+                      value={planForm.phone}
+                      onChange={(e) => setPlanForm({ ...planForm, phone: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 transition-all focus:outline-none"
+                      placeholder="Ví dụ: 0973480488"
+                    />
                   </div>
-                </form>
-              )}
-            </motion.div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Ghi chú yêu cầu thêm (nếu có)</label>
+                    <textarea
+                      value={planForm.notes}
+                      onChange={(e) => setPlanForm({ ...planForm, notes: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:bg-white rounded-xl px-4 py-3 text-sm font-semibold text-slate-800 h-20 transition-all focus:outline-none resize-none"
+                      placeholder="Nhập ghi chú hoặc thời gian thuận tiện để gọi lại cho bạn..."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPlanModalOpen(false)}
+                    className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer text-center"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-blue-100 active:scale-95 transition-all cursor-pointer text-center"
+                  >
+                    TIẾP TỤC ĐĂNG KÝ
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
     </div>
   );
