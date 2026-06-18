@@ -188,10 +188,10 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (isLoading) return;
 
-    // Load data based on role
-    let path = 'settings/siteContent'; // Default/Main
+    // ĐÃ SỬA: Đảm bảo đường dẫn luôn luôn là số chẵn (4 phân đoạn) đối với Sub-account
+    let path = 'settings/siteContent'; 
     if (role === UserRole.SUB_ACCOUNT && user?.email) {
-      path = `users/${user.email}/siteContent`;
+      path = `users/${user.email}/siteContent/data`;
     }
 
     // Initial load from localStorage as fallback
@@ -326,9 +326,10 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCustomData(prev => {
       const newData = { ...prev, [key]: value };
       
+      // ĐÃ SỬA: Đảm bảo đồng bộ hóa chính xác đường dẫn 4 phân đoạn khi ghi dữ liệu (WRITE)
       let path = 'settings/siteContent';
       if (role === UserRole.SUB_ACCOUNT && user?.email) {
-        path = `users/${user.email}/siteContent`;
+        path = `users/${user.email}/siteContent/data`;
       }
 
       const localKey = `yohu_site_content_${role === UserRole.SUPER_ADMIN ? 'main' : user?.email || 'anon'}`;
