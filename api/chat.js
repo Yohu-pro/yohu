@@ -47,7 +47,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, apiKey } = req.body;
+    const body = req.body || {};
+    const { message, apiKey } = typeof body === "string" ? JSON.parse(body) : body;
     const config = await readConfig();
 
     const candidateKeys = [];
