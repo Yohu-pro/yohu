@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { PRODUCTS } from "./products-data.js";
 
 function initFirebase() {
   if (!getApps().length) {
@@ -100,9 +101,7 @@ export default async function handler(req, res) {
 
     const isGeneral =
       !msgLower ||
-      generalKeywords.some(
-        (k) => nonAccentMsg === k || (nonAccentMsg.startsWith(k) && nonAccentMsg.length <= k.length + 3)
-      );
+      generalKeywords.some((k) => nonAccentMsg === k);
 
     if (isGeneral) {
       return res.json({
@@ -118,8 +117,9 @@ Bạn cần hỗ trợ gì hôm nay?`,
     }
 
     const customProducts = config.custom_products || [];
-    const productSummary = customProducts
-      .map((p) => `- ${p.name}: ${p.price} (${p.category})`)
+    const consolidatedProducts = [...PRODUCTS, ...customProducts];
+    const productSummary = consolidatedProducts
+      .map((p) => `- Mã: ${p.id} | ${p.name}: ${p.price}${p.oldPrice ? ` (giá cũ: ${p.oldPrice})` : ""} | Danh mục: ${p.category}${p.brand ? ` | Hãng: ${p.brand}` : ""}`)
       .join("\n");
 
     const prompt = `Bạn là trợ lý AI thông minh cho ${config.company_name}.
@@ -128,15 +128,19 @@ Thông tin công ty:
 - Hotline: ${config.hotline}
 - Zalo: ${config.zalo}
 
-Kiến thức sản phẩm:
+DANH SÁCH SẢN PHẨM ĐẦY ĐỦ (mã, tên, giá, danh mục):
 ${productSummary || "Chưa có dữ liệu sản phẩm."}
 
-Kiến thức bổ trợ:
+Kiến thức bổ trợ (bảng giá/catalogue):
 ${config.bot_knowledge || "Không có."}
 
-Hãy trả lời chuyên nghiệp, thân thiện, súc tích bằng tiếng Việt.
+HƯỚNG DẪN TRẢ LỜI:
+1. Khi khách hỏi về sản phẩm, giá, hoặc mã hàng — LUÔN tra cứu chính xác trong DANH SÁCH SẢN PHẨM ở trên trước khi trả lời.
+2. Nếu tìm thấy sản phẩm khớp, trả lời kèm: tên đầy đủ, mã sản phẩm, giá (và giá cũ nếu có khuyến mãi).
+3. Nếu khách hỏi mã hàng cụ thể mà không có trong danh sách, hãy nói rõ chưa có thông tin và đề nghị liên hệ Hotline/Zalo để được tư vấn chi tiết.
+4. Trả lời chuyên nghiệp, thân thiện, súc tích bằng tiếng Việt.
 
-Câu hỏi: ${message}`;
+Câu hỏi của khách: ${message}`;
 
     const modelsToTry = [
       config.gemini_model?.trim() || "gemini-2.5-flash",
