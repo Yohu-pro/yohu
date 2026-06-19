@@ -3,9 +3,11 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
+    { "source": "/api/chat",          "destination": "/api/chat" },
+    { "source": "/api/orders",        "destination": "/api/orders" },
     { "source": "/api/imagekit-auth", "destination": "/api/imagekit-auth" },
-    { "source": "/api/config", "destination": "/api/config" },
-    { "source": "/api/sheets/fetch", "destination": "/api/sheets/fetch" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/config",        "destination": "/api/config" },
+    { "source": "/api/sheets/fetch",  "destination": "/api/sheets/fetch" },
+    { "source": "/(.*)",              "destination": "/index.html" }
   ]
 }
